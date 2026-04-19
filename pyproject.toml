@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "alembic-viz"
+name = "mviz"
 version = "0.1.0"
 description = "Alembic Migration Visualizer & Reorganizer"
 requires-python = ">=3.9"
@@ -14,10 +14,10 @@ dependencies = [
 ]
 
 [project.scripts]
-alembic-viz = "alembic_viz.cli:main"
+mviz = "mviz.views.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/alembic_viz"]
+packages = ["src/mviz"]
 
 [tool.uv]
 package = true

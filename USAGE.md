@@ -1,24 +1,24 @@
-# Usage
+# Usage (Development)
 
-This file shows how to run the `alembic-viz` CLI against an Alembic migrations repository.
+This document is for **development** of mviz itself.
+
+For **installing and using** the tool, see [README.md](./README.md).
 
 ## Prerequisites
 
 From this repository root:
 
 ```bash
-# First-time setup: install the package
+# First-time setup: install the package in editable mode
 uv sync
 
 # Or with pip
 pip install -e .
 ```
 
-> **Note:** You must run `uv sync` (or `pip install -e .`) once after cloning to make the `alembic-viz` command available.
-
 ## Sample Repo Assumptions
 
-These examples assume your Alembic migrations live at `~/myproject/alembic/versions` with an `alembic.ini` file at `~/myproject/alembic.ini`.
+These examples assume your migrations live at `~/myproject/alembic/versions` with an `alembic.ini` file at `~/myproject/alembic.ini`.
 
 Replace these paths with your actual locations.
 
@@ -26,53 +26,54 @@ Replace these paths with your actual locations.
 
 ### View in Browser
 
-Open migrations in the interactive browser editor:
-
 ```bash
-# Using explicit directory
-uv run alembic-viz view --directory ~/myproject/alembic/versions
+# Auto-detect provider and config
+uv run mviz
 
-# Using alembic.ini discovery
-uv run alembic-viz view --alembic-ini ~/myproject/alembic.ini
+# Explicitly specify Alembic
+uv run mviz --provider alembic
 
-# From a saved GraphState JSON file
-uv run alembic-viz view /tmp/graph-state.json
+# Specify config file
+uv run mviz --config ~/myproject/alembic.ini
 
-# Fixed port
-uv run alembic-viz view --directory ~/myproject/alembic/versions --port 8765
-
-# Export to file after editing
-uv run alembic-viz view \
-  --directory ~/myproject/alembic/versions \
-  --output /tmp/exported-graph.json
-
-# Don't open browser automatically
-uv run alembic-viz view --directory ~/myproject/alembic/versions --no-open
+# Combine options
+uv run mviz --provider alembic --config ~/myproject/alembic.ini
 ```
-~/work/mpower-lms 
 
 ### Alternative: Using Python module
 
 ```bash
-python -m alembic_viz view --directory ~/myproject/alembic/versions
+python -m mviz --config ~/myproject/alembic.ini
 ```
-
-## Interactive Viewer Features
-
-Once the browser opens:
-
-- **Drag nodes** to reposition them
-- **Drag the gold handle** at the bottom of a node onto another node to reparent
-- **Click a node** to see details and detach its parent
-- **Export Graph** button - save the current graph state to JSON
-- **Apply To Repo** button - write parent changes back to migration files
-- **Reset Layout** button - restore auto-positioned layout
-
-Press `Ctrl+C` in the terminal to stop the server.
 
 ## Help
 
 ```bash
-uv run alembic-viz --help
-uv run alembic-viz view --help
+uv run mviz --help
 ```
+
+## Development Commands
+
+```bash
+# Format code
+uv run ruff format src/
+
+# Check linting
+uv run ruff check src/
+
+# Build package
+uv build
+```
+
+## Adding a New Provider
+
+To add support for a new migration provider (e.g., Django, Flyway):
+
+1. Create `src/mviz/repositories/{provider}_repo.py`
+2. Implement `MigrationRepository` interface
+3. Add `PROVIDER_NAME` class attribute
+4. Implement `detect()` classmethod for auto-detection
+5. Register in `provider_factory.py`
+6. Add tests
+
+See `alembic_repo.py` as a reference implementation.

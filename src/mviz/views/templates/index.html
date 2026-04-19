@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>mviz · Migration Visualizer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        color-scheme: dark;
+        
+        /* Swiss Terminal Palette */
+        --bg-primary: #0a0a0b;
+        --bg-secondary: #111113;
+        --bg-tertiary: #1a1a1d;
+        --border: #2a2a2e;
+        --border-accent: #3a3a3f;
+        
+        --text-primary: #fafafa;
+        --text-secondary: #a0a0a8;
+        --text-muted: #606068;
+        
+        /* Accents */
+        --accent-cyan: #00d4ff;
+        --accent-cyan-dim: rgba(0, 212, 255, 0.15);
+        --accent-amber: #ffaa00;
+        --accent-amber-dim: rgba(255, 170, 0, 0.15);
+        --accent-magenta: #ff0066;
+        --accent-magenta-dim: rgba(255, 0, 102, 0.15);
+        --accent-green: #00ff88;
+        --accent-green-dim: rgba(0, 255, 136, 0.15);
+        
+        /* Node states */
+        --node-default: #1a1a1d;
+        --node-border: #3a3a3f;
+        --node-head: var(--accent-green);
+        --node-head-bg: var(--accent-green-dim);
+        --node-orphan: var(--accent-amber);
+        --node-orphan-bg: var(--accent-amber-dim);
+        --node-cycle: var(--accent-magenta);
+        --node-cycle-bg: var(--accent-magenta-dim);
+        --node-selected: var(--accent-cyan);
+        --node-selected-bg: var(--accent-cyan-dim);
+        --accent-red: #ff3333;
+        --accent-red-dim: rgba(255, 51, 51, 0.15);
+        --node-detached: var(--accent-red);
+        --node-detached-bg: var(--accent-red-dim);
+        
+        --edge-default: #404048;
+        --edge-active: var(--text-secondary);
+        
+        /* Typography */
+        --font-mono: 'JetBrains Mono', 'SF Mono', 'Monaco', monospace;
+        --font-ui: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+        
+        /* Spacing */
+        --space-xs: 4px;
+        --space-sm: 8px;
+        --space-md: 16px;
+        --space-lg: 24px;
+        --space-xl: 32px;
+        
+        /* Grid */
+        --sidebar-width: 380px;
+        --panel-gap: 1px;
+      }
+      
+      * { 
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      
+      body {
+        font-family: var(--font-ui);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        min-height: 100vh;
+        overflow: hidden;
+      }
+      
+      /* Layout Grid */
+      .app {
+        display: grid;
+        grid-template-columns: var(--sidebar-width) 1fr;
+        height: 100vh;
+        overflow: hidden;
+      }
+      
+      /* Sidebar */
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-secondary);
+        border-right: 1px solid var(--border);
+        height: 100vh;
+        overflow: hidden;
+      }
+      
+      .sidebar-header {
+        padding: var(--space-lg);
+        border-bottom: 1px solid var(--border);
+      }
+      
+      .brand {
+        display: flex;
+        align-items: baseline;
+        gap: var(--space-sm);
+      }
+      
+      .brand-name {
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--text-primary);
+      }
+      
+      .brand-dot {
+        width: 8px;
+        height: 8px;
+        background: var(--accent-cyan);
+        animation: pulse 2s ease-in-out infinite;
+      }
+      
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+      
+      .source-path {
+        margin-top: var(--space-xs);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--text-muted);
+        word-break: break-all;
+      }
+      
+      /* Stats Grid */
+      .stats-section {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        border-bottom: 1px solid var(--border);
+      }
+      
+      .stat-cell {
+        padding: var(--space-md);
+        text-align: center;
+        border-right: 1px solid var(--border);
+      }
+      
+      .stat-cell:last-child {
+        border-right: none;
+      }
+      
+      .stat-value {
+        font-family: var(--font-mono);
+        font-size: 28px;
+        font-weight: 700;
+        line-height: 1;
+      }
+      
+      .stat-value.migrations { color: var(--text-primary); }
+      .stat-value.heads { color: var(--accent-green); }
+      .stat-value.orphans { color: var(--accent-amber); }
+      .stat-value.cycles { color: var(--accent-magenta); }
+      
+      .stat-label {
+        margin-top: var(--space-xs);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+      }
+      
+      /* Scrollable Content */
+      .sidebar-content {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        padding: var(--space-md);
+      }
+      
+      .sidebar-content::-webkit-scrollbar {
+        width: 6px;
+      }
+      
+      .sidebar-content::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      
+      .sidebar-content::-webkit-scrollbar-thumb {
+        background: var(--border-accent);
+      }
+      
+      /* Panels */
+      .panel {
+        margin-bottom: var(--space-md);
+        border: 1px solid var(--border);
+      }
+      
+      .panel-header {
+        padding: var(--space-sm) var(--space-md);
+        background: var(--bg-tertiary);
+        border-bottom: 1px solid var(--border);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      
+      .panel-content {
+        padding: var(--space-md);
+      }
+      
+      /* Lists */
+      .empty-state {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--text-muted);
+        padding: var(--space-md) 0;
+      }
+      
+      .badge-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-xs);
+      }
+      
+      .badge {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        padding: 4px 8px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-accent);
+        color: var(--text-secondary);
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      
+      .badge.head {
+        background: var(--accent-green-dim);
+        border-color: var(--accent-green);
+        color: var(--accent-green);
+      }
+      
+      .badge.orphan {
+        background: var(--accent-amber-dim);
+        border-color: var(--accent-amber);
+        color: var(--accent-amber);
+      }
+      
+      /* Node Details */
+      .detail-grid {
+        display: grid;
+        gap: var(--space-md);
+      }
+      
+      .detail-row {
+        display: grid;
+        grid-template-columns: 80px 1fr;
+        gap: var(--space-sm);
+        align-items: start;
+      }
+      
+      .detail-label {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+        padding-top: 2px;
+      }
+      
+      .detail-value {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--text-primary);
+        word-break: break-all;
+      }
+      
+      .detail-value.muted {
+        color: var(--text-muted);
+        font-style: italic;
+      }
+      
+      /* Legend */
+      .legend-grid {
+        display: grid;
+        gap: var(--space-sm);
+      }
+      
+      .legend-item {
+        display: grid;
+        grid-template-columns: 16px 1fr;
+        gap: var(--space-sm);
+        align-items: center;
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      
+      .legend-swatch {
+        width: 12px;
+        height: 12px;
+        border: 2px solid;
+      }
+      
+      .legend-swatch.default { border-color: var(--node-border); background: var(--node-default); }
+      .legend-swatch.head { border-color: var(--accent-green); background: var(--accent-green-dim); }
+      .legend-swatch.orphan { border-color: var(--accent-amber); background: var(--accent-amber-dim); }
+      .legend-swatch.cycle { border-color: var(--accent-magenta); background: var(--accent-magenta-dim); }
+      .legend-swatch.selected { border-color: var(--accent-cyan); background: var(--accent-cyan-dim); }
+      .legend-swatch.detached { border-color: var(--accent-red); background: var(--accent-red-dim); border-style: dashed; }
+      
+      /* Action Buttons */
+      .actions-section {
+        padding: var(--space-md);
+        border-top: 1px solid var(--border);
+        background: var(--bg-secondary);
+      }
+      
+      .btn-group {
+        display: flex;
+        gap: var(--space-sm);
+        margin-bottom: var(--space-md);
+      }
+      
+      .btn {
+        flex: 1;
+        appearance: none;
+        border: 1px solid var(--border-accent);
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        padding: 10px var(--space-md);
+        font-family: var(--font-ui);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      
+      .btn:hover:not(:disabled) {
+        border-color: var(--text-secondary);
+        background: var(--border);
+      }
+      
+      .btn:active:not(:disabled) {
+        transform: translateY(1px);
+      }
+      
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      
+      .btn.primary {
+        background: var(--accent-cyan);
+        border-color: var(--accent-cyan);
+        color: var(--bg-primary);
+      }
+      
+      .btn.primary:hover:not(:disabled) {
+        background: #33ddff;
+        border-color: #33ddff;
+      }
+      
+      .btn.danger {
+        border-color: var(--accent-magenta);
+        color: var(--accent-magenta);
+      }
+      
+      .btn.danger:hover:not(:disabled) {
+        background: var(--accent-magenta-dim);
+      }
+      
+      /* Status Line */
+      .status-bar {
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+        padding: var(--space-sm) var(--space-md);
+        background: var(--bg-tertiary);
+        border-top: 1px solid var(--border);
+      }
+      
+      .status-indicator {
+        width: 6px;
+        height: 6px;
+        background: var(--text-muted);
+      }
+      
+      .status-indicator.ready { background: var(--accent-green); }
+      .status-indicator.error { background: var(--accent-magenta); }
+      .status-indicator.active { background: var(--accent-cyan); animation: blink 1s step-end infinite; }
+      
+      @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+      }
+      
+      .status-text {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--text-secondary);
+        flex: 1;
+      }
+      
+      .status-text.error {
+        color: var(--accent-magenta);
+      }
+      
+      /* Graph Area */
+      .graph-container {
+        position: relative;
+        overflow: auto;
+        background: var(--bg-primary);
+      }
+
+      .graph-canvas {
+        width: max-content;
+        min-width: 100%;
+      }
+      
+      .graph-container::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+      
+      .graph-container::-webkit-scrollbar-track {
+        background: var(--bg-secondary);
+      }
+      
+      .graph-container::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border: 2px solid var(--bg-secondary);
+      }
+      
+      .graph-container::-webkit-scrollbar-thumb:hover {
+        background: var(--border-accent);
+      }
+      
+      /* SVG Styles */
+      svg {
+        display: block;
+      }
+      
+      .edge {
+        fill: none;
+        stroke: var(--edge-default);
+        stroke-width: 1.5;
+        transition: stroke 0.2s ease;
+      }
+      
+      .edge:hover {
+        stroke: var(--edge-active);
+      }
+      
+      .node {
+        cursor: pointer;
+        transition: transform 0.1s ease;
+      }
+      
+      .node rect {
+        fill: var(--node-default);
+        stroke: var(--node-border);
+        stroke-width: 1;
+        transition: all 0.2s ease;
+      }
+      
+      .node:hover rect {
+        stroke: var(--text-secondary);
+      }
+      
+      .node.head rect {
+        fill: var(--node-head-bg);
+        stroke: var(--node-head);
+      }
+      
+      .node.orphan rect {
+        fill: var(--node-orphan-bg);
+        stroke: var(--node-orphan);
+      }
+      
+      .node.cycle rect {
+        fill: var(--node-cycle-bg);
+        stroke: var(--node-cycle);
+        stroke-width: 2;
+      }
+
+      .node.detached rect {
+        fill: var(--node-detached-bg);
+        stroke: var(--node-detached);
+        stroke-width: 2;
+        stroke-dasharray: 6 3;
+      }
+
+      /* Keep dashed red border visible even when selected */
+      .node.selected.detached rect {
+        fill: var(--node-selected-bg);
+        stroke: var(--node-detached);
+        stroke-width: 2;
+        stroke-dasharray: 6 3;
+      }
+
+      .node.selected rect {
+        fill: var(--node-selected-bg);
+        stroke: var(--node-selected);
+        stroke-width: 2;
+      }
+      
+      .node-title {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        fill: var(--text-primary);
+        pointer-events: none;
+      }
+      
+      .node-meta {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        fill: var(--text-muted);
+        pointer-events: none;
+      }
+      
+      /* Empty State */
+      .empty-state-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        min-height: 400px;
+      }
+      
+      .empty-state-message {
+        text-align: center;
+        color: var(--text-muted);
+      }
+      
+      .empty-state-message .icon {
+        font-size: 48px;
+        margin-bottom: var(--space-md);
+        opacity: 0.5;
+      }
+      
+      /* Responsive */
+      @media (max-width: 1024px) {
+        .app {
+          grid-template-columns: 1fr;
+          grid-template-rows: auto 1fr;
+        }
+        
+        .sidebar {
+          max-height: 40vh;
+          border-right: none;
+          border-bottom: 1px solid var(--border);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <header class="sidebar-header">
+          <div class="brand">
+            <span class="brand-name">mviz</span>
+            <span class="brand-dot"></span>
+          </div>
+          <div class="source-path" id="source">Loading...</div>
+        </header>
+        
+        <section class="stats-section">
+          <div class="stat-cell">
+            <div class="stat-value migrations" id="count">0</div>
+            <div class="stat-label">Migrations</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value heads" id="headsCount">0</div>
+            <div class="stat-label">Heads</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value orphans" id="orphansCount">0</div>
+            <div class="stat-label">Orphans</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value cycles" id="cyclesCount">0</div>
+            <div class="stat-label">Cycles</div>
+          </div>
+        </section>
+        
+        <div class="sidebar-content">
+          <div class="panel">
+            <div class="panel-header">Head Revisions</div>
+            <div class="panel-content">
+              <div id="heads" class="badge-list">
+                <div class="empty-state">None</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="panel">
+            <div class="panel-header">Orphan Revisions</div>
+            <div class="panel-content">
+              <div id="orphans" class="badge-list">
+                <div class="empty-state">None</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="panel">
+            <div class="panel-header">Selected Node</div>
+            <div class="panel-content">
+              <div id="selectedNode" class="detail-grid">
+                <div class="empty-state">Click a node to inspect</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="panel">
+            <div class="panel-header">Legend</div>
+            <div class="panel-content">
+              <div class="legend-grid">
+                <div class="legend-item">
+                  <div class="legend-swatch default"></div>
+                  <span>Regular revision</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-swatch head"></div>
+                  <span>Head (latest)</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-swatch orphan"></div>
+                  <span>Orphan (missing parent)</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-swatch cycle"></div>
+                  <span>Cycle member</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-swatch selected"></div>
+                  <span>Selected (click to rewire)</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-swatch detached"></div>
+                  <span>Detached (parent removed)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <section class="actions-section">
+          <div class="btn-group">
+            <button id="applyButton" class="btn primary">Apply to Repo</button>
+            <button id="exportButton" class="btn">Export</button>
+          </div>
+          <div class="btn-group">
+            <button id="refreshButton" class="btn">Refresh from Disk</button>
+          </div>
+          <div class="btn-group">
+            <button id="autoFormatButton" class="btn">Auto Format</button>
+            <button id="resetButton" class="btn">Reset Layout</button>
+            <button id="clearSelectionButton" class="btn" disabled>Clear</button>
+          </div>
+          <div class="btn-group">
+            <button id="detachButton" class="btn danger" disabled>Detach Parent</button>
+          </div>
+        </section>
+        
+        <div class="status-bar">
+          <div class="status-indicator" id="statusIndicator"></div>
+          <div class="status-text" id="status">Initializing...</div>
+        </div>
+      </aside>
+      
+      <main class="graph-container" id="graphContainer">
+        <div id="app" class="empty-state-container">
+          <div class="empty-state-message">
+            <div class="icon">◈</div>
+            <div>Loading migration graph...</div>
+          </div>
+        </div>
+      </main>
+    </div>
+    
+    <script src="/static/app.js"></script>
+  </body>
+</html>
