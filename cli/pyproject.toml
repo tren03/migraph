@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "alembic-viz-cli"
+version = "0.1.0"
+description = "Main CLI for alembic-viz"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "CLI Team" },
+]
+dependencies = [
+    "alembic-viz-contracts",
+    "alembic-viz-graph-ops",
+    "alembic-viz-scanner",
+    "alembic-viz-viewer",
+    "alembic-viz-writer",
+    "typer>=0.9.0",
+]
+
+[tool.uv.sources]
+alembic-viz-contracts = { workspace = true }
+alembic-viz-graph-ops = { workspace = true }
+alembic-viz-scanner = { workspace = true }
+alembic-viz-viewer = { workspace = true }
+alembic-viz-writer = { workspace = true }
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+alembic-viz = "alembic_viz.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["alembic_viz"]
