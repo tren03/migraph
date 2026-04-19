@@ -54,7 +54,7 @@ def view(
     try:
         graph: GraphState = scanner.scan(
             config_path=config,
-            provider=provider,
+            provider="alembic",
         )
         apply_dir = graph.source_directory
     except FileNotFoundError as exc:
