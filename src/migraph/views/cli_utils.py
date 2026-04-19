@@ -1,4 +1,4 @@
-"""CLI utility functions for mviz."""
+"""CLI utility functions for migraph."""
 
 import json
 import sys
@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 import typer
 
-from mviz.domain.models import ErrorResult
+from migraph.domain.models import ErrorResult
 
 
 def format_json(data: Any) -> str:

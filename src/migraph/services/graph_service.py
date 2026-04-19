@@ -3,7 +3,7 @@
 from collections import Counter, deque
 from typing import Any, Dict, List, Set
 
-from mviz.domain.models import GraphState, MigrationNode, ValidationError
+from migraph.domain.models import GraphState, MigrationNode, ValidationError
 
 
 class GraphService:

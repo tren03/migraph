@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from mviz.domain.models import GraphState
+from migraph.domain.models import GraphState
 
 
 def load_template(filename: str) -> bytes:

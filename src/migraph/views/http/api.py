@@ -4,12 +4,12 @@ These functions contain the business logic for handling API requests.
 They operate on a HandlerContext and are separate from HTTP protocol handling.
 """
 
-from mviz.domain.exceptions import ConflictError
-from mviz.domain.exceptions import ValidationError as DomainValidationError
-from mviz.domain.models import GraphState
-from mviz.views.http.context import HandlerContext
-from mviz.views.http.state import save_graph_state
-from mviz.views.view_model import preview_graph_state
+from migraph.domain.exceptions import ConflictError
+from migraph.domain.exceptions import ValidationError as DomainValidationError
+from migraph.domain.models import GraphState
+from migraph.views.http.context import HandlerContext
+from migraph.views.http.state import save_graph_state
+from migraph.views.view_model import preview_graph_state
 
 
 def handle_preview(context: HandlerContext, proposed: GraphState) -> dict:

@@ -1,15 +1,15 @@
 """Alembic migration provider."""
 
 # Main repository implementation
-from mviz.repositories.alembic.repo import AlembicRepository
+from migraph.repositories.alembic.repo import AlembicRepository
 
 # Public functions for advanced use
-from mviz.repositories.alembic.config import (
+from migraph.repositories.alembic.config import (
     find_alembic_ini,
     parse_alembic_ini,
     resolve_migrations_root,
 )
-from mviz.repositories.alembic.parsing import parse_migration_file
+from migraph.repositories.alembic.parsing import parse_migration_file
 
 __all__ = [
     # Repository

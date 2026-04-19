@@ -3,8 +3,8 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-from mviz.domain.models import GraphState
-from mviz.services.writer_service import WriterService
+from migraph.domain.models import GraphState
+from migraph.services.writer_service import WriterService
 
 
 @dataclass

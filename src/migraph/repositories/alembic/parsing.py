@@ -3,9 +3,9 @@
 from pathlib import Path
 from typing import Optional
 
-from mviz.domain.exceptions import FileParseError
-from mviz.domain.models import MigrationMetadata, MigrationNode
-from mviz.repositories.alembic.cst_utils import (
+from migraph.domain.exceptions import FileParseError
+from migraph.domain.models import MigrationMetadata, MigrationNode
+from migraph.repositories.alembic.cst_utils import (
     extract_assignments,
     extract_docstring,
     parse_docstring_metadata,

@@ -2,8 +2,8 @@
 
 from typing import Dict, List, Type
 
-from mviz.repositories.alembic import AlembicRepository
-from mviz.repositories.interfaces import MigrationRepository
+from migraph.repositories.alembic import AlembicRepository
+from migraph.repositories.interfaces import MigrationRepository
 
 
 class MigrationProviderFactory:

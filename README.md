@@ -1,24 +1,24 @@
-# mviz
+# migraph
 
 Interactive browser UI for visualizing and rewiring Alembic migration graphs.
 
 ## Install
 
 ```bash
-pip install mviz
+pip install migraph
 # or
-uv tool install mviz
+uv tool install migraph
 ```
 
 ## Usage
 
 ```bash
 # Auto-detect alembic.ini from current directory
-mviz
+migraph
 
 # Explicit config or provider
-mviz --config path/to/alembic.ini
-mviz --provider alembic --config path/to/alembic.ini
+migraph --config path/to/alembic.ini
+migraph --provider alembic --config path/to/alembic.ini
 ```
 
 ## Browser UI

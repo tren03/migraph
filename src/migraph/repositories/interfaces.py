@@ -2,7 +2,7 @@
 
 from typing import List, Optional, Protocol
 
-from mviz.domain.models import GraphState, MigrationNode
+from migraph.domain.models import GraphState, MigrationNode
 
 
 class MigrationRepository(Protocol):

@@ -1,17 +1,17 @@
-"""CLI controller for mviz."""
+"""CLI controller for migraph."""
 
 from typing import Optional
 
 import typer
 from typing_extensions import Annotated
 
-from mviz.domain.models import GraphState
-from mviz.repositories.provider_factory import get_provider_factory
-from mviz.services.scanner_service import ScannerService
-from mviz.views.cli_utils import error_and_exit
-from mviz.views.http import serve_graph
+from migraph.domain.models import GraphState
+from migraph.repositories.provider_factory import get_provider_factory
+from migraph.services.scanner_service import ScannerService
+from migraph.views.cli_utils import error_and_exit
+from migraph.views.http import serve_graph
 
-app = typer.Typer(help="mviz - Migration visualizer", add_completion=False)
+app = typer.Typer(help="migraph - Migration visualizer", add_completion=False)
 
 
 @app.callback(invoke_without_command=True)
@@ -90,7 +90,7 @@ def view(
 
 
 def main() -> None:
-    """Entry point for the mviz CLI."""
+    """Entry point for the migraph CLI."""
     app()
 
 

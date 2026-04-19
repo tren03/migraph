@@ -1,9 +1,9 @@
-"""mviz - Alembic migration visualizer and reorganizer."""
+"""migraph - Alembic migration visualizer and reorganizer."""
 
 __version__ = "0.1.0"
 
 # Domain exports
-from mviz.domain.models import (
+from migraph.domain.models import (
     GraphState,
     MigrationNode,
     MigrationMetadata,
@@ -13,10 +13,10 @@ from mviz.domain.models import (
 )
 
 # Service exports
-from mviz.services.scanner_service import ScannerService
+from migraph.services.scanner_service import ScannerService
 
 # View exports
-from mviz.views.http import serve_graph
+from migraph.views.http import serve_graph
 
 __all__ = [
     # Domain

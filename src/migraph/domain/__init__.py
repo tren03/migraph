@@ -1,6 +1,6 @@
 """Domain layer - core entities and business rules."""
 
-from mviz.domain.models import (
+from migraph.domain.models import (
     ErrorResult,
     GraphState,
     MigrationMetadata,
@@ -10,7 +10,7 @@ from mviz.domain.models import (
     UIState,
     ValidationError,
 )
-from mviz.domain.exceptions import (
+from migraph.domain.exceptions import (
     ConflictError,
     DomainError,
     MigrationNotFoundError,

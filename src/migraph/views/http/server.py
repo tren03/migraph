@@ -5,11 +5,11 @@ import webbrowser
 from http.server import ThreadingHTTPServer
 from typing import Optional
 
-from mviz.domain.models import GraphState
-from mviz.services.writer_service import WriterService
-from mviz.views.http.context import HandlerContext
-from mviz.views.http.handler import ViewerHandler
-from mviz.views.http.state import load_template
+from migraph.domain.models import GraphState
+from migraph.services.writer_service import WriterService
+from migraph.views.http.context import HandlerContext
+from migraph.views.http.handler import ViewerHandler
+from migraph.views.http.state import load_template
 
 
 def serve_graph(

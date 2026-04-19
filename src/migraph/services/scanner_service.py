@@ -1,8 +1,8 @@
 """Scanner service - use case for scanning migrations from any provider."""
 
-from mviz.domain.models import GraphState
-from mviz.repositories.interfaces import MigrationRepository
-from mviz.repositories.provider_factory import get_repository
+from migraph.domain.models import GraphState
+from migraph.repositories.interfaces import MigrationRepository
+from migraph.repositories.provider_factory import get_repository
 
 
 class ScannerService:

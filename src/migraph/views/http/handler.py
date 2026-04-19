@@ -3,10 +3,10 @@
 from http.server import BaseHTTPRequestHandler
 from typing import Any
 
-from mviz.domain.models import GraphState
-from mviz.views.http.api import handle_apply, handle_preview, handle_save
-from mviz.views.http.context import HandlerContext
-from mviz.views.http.responses import serve_static, write_json
+from migraph.domain.models import GraphState
+from migraph.views.http.api import handle_apply, handle_preview, handle_save
+from migraph.views.http.context import HandlerContext
+from migraph.views.http.responses import serve_static, write_json
 
 
 class ViewerHandler(BaseHTTPRequestHandler):
@@ -28,13 +28,13 @@ class ViewerHandler(BaseHTTPRequestHandler):
             serve_static(self, self.context.js, "application/javascript")
             return
         if self.path == "/api/graph":
-            from mviz.views.view_model import preview_graph_state
+            from migraph.views.view_model import preview_graph_state
 
             write_json(self, 200, preview_graph_state(self.context.current_graph))
             return
         if self.path == "/api/refresh":
-            from mviz.services.scanner_service import ScannerService
-            from mviz.views.view_model import preview_graph_state
+            from migraph.services.scanner_service import ScannerService
+            from migraph.views.view_model import preview_graph_state
 
             try:
                 graph = ScannerService().scan(

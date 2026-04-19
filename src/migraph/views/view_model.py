@@ -3,8 +3,8 @@
 from collections import deque
 from typing import Any, Dict, List
 
-from mviz.domain.models import GraphState
-from mviz.services.graph_service import GraphService
+from migraph.domain.models import GraphState
+from migraph.services.graph_service import GraphService
 
 # Layout constants
 NODE_WIDTH = 220

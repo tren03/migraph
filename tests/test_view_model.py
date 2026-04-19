@@ -5,8 +5,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from mviz.domain.models import GraphState, MigrationMetadata, MigrationNode
-from mviz.views.view_model import build_view_model
+from migraph.domain.models import GraphState, MigrationMetadata, MigrationNode
+from migraph.views.view_model import build_view_model
 
 
 class BuildViewModelTests(unittest.TestCase):

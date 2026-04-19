@@ -6,14 +6,14 @@ from typing import Any, Dict, List, Optional, Union
 
 import libcst as cst
 
-from mviz.domain.exceptions import (
+from migraph.domain.exceptions import (
     ConflictError,
     ValidationError as DomainValidationError,
 )
-from mviz.domain.models import GraphState
-from mviz.repositories.interfaces import MigrationRepository
-from mviz.repositories.provider_factory import get_repository
-from mviz.services.graph_service import GraphService
+from migraph.domain.models import GraphState
+from migraph.repositories.interfaces import MigrationRepository
+from migraph.repositories.provider_factory import get_repository
+from migraph.services.graph_service import GraphService
 
 
 @dataclass(frozen=True)

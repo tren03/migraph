@@ -1,6 +1,6 @@
 # Usage (Development)
 
-This document is for **development** of mviz itself.
+This document is for **development** of migraph itself.
 
 For **installing and using** the tool, see [README.md](./README.md).
 
@@ -28,28 +28,28 @@ Replace these paths with your actual locations.
 
 ```bash
 # Auto-detect provider and config
-uv run mviz
+uv run migraph
 
 # Explicitly specify Alembic
-uv run mviz --provider alembic
+uv run migraph --provider alembic
 
 # Specify config file
-uv run mviz --config ~/myproject/alembic.ini
+uv run migraph --config ~/myproject/alembic.ini
 
 # Combine options
-uv run mviz --provider alembic --config ~/myproject/alembic.ini
+uv run migraph --provider alembic --config ~/myproject/alembic.ini
 ```
 
 ### Alternative: Using Python module
 
 ```bash
-python -m mviz --config ~/myproject/alembic.ini
+python -m migraph --config ~/myproject/alembic.ini
 ```
 
 ## Help
 
 ```bash
-uv run mviz --help
+uv run migraph --help
 ```
 
 ## Development Commands
@@ -69,7 +69,7 @@ uv build
 
 To add support for a new migration provider (e.g., Django, Flyway):
 
-1. Create `src/mviz/repositories/{provider}_repo.py`
+1. Create `src/migraph/repositories/{provider}_repo.py`
 2. Implement `MigrationRepository` interface
 3. Add `PROVIDER_NAME` class attribute
 4. Implement `detect()` classmethod for auto-detection

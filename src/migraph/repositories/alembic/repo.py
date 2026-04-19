@@ -3,13 +3,13 @@
 from pathlib import Path
 from typing import List
 
-from mviz.domain.models import GraphState, MigrationNode, ValidationError
-from mviz.repositories.alembic.config import (
+from migraph.domain.models import GraphState, MigrationNode, ValidationError
+from migraph.repositories.alembic.config import (
     find_alembic_ini,
     resolve_migrations_root,
 )
-from mviz.repositories.alembic.parsing import parse_migration_file
-from mviz.repositories.interfaces import MigrationRepository
+from migraph.repositories.alembic.parsing import parse_migration_file
+from migraph.repositories.interfaces import MigrationRepository
 
 
 class AlembicRepository(MigrationRepository):
