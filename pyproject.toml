@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "migraph"
-version = "0.1.0"
+version = "0.0.1"
 description = "Interactive browser UI for visualizing and rewiring Alembic migration graphs"
 readme = "README.md"
 license = { text = "MIT" }
