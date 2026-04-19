@@ -1,23 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "alembic-viz"
 version = "0.1.0"
 description = "Alembic Migration Visualizer & Reorganizer"
 requires-python = ">=3.9"
-
-[tool.uv.workspace]
-members = [
-    "contracts",
-    "scanner",
-    "graph_ops",
-    "viewer",
-    "writer",
-    "cli",
+dependencies = [
+    "typer>=0.9.0",
+    "libcst>=1.0.0",
+    "pydantic>=2.0.0",
 ]
 
-[tool.uv.sources]
-alembic-viz-contracts = { workspace = true }
-alembic-viz-graph-ops = { workspace = true }
-alembic-viz-scanner = { workspace = true }
-alembic-viz-viewer = { workspace = true }
-alembic-viz-writer = { workspace = true }
-alembic-viz-cli = { workspace = true }
+[project.scripts]
+alembic-viz = "alembic_viz.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/alembic_viz"]
+
+[tool.uv]
+package = true
+
+[dependency-groups]
+dev = [
+    "ruff>=0.6.0",
+]
