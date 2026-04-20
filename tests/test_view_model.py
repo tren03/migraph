@@ -10,7 +10,7 @@ from migraph.views.view_model import build_view_model
 
 
 class BuildViewModelTests(unittest.TestCase):
-    def test_layout_keeps_heads_above_ancestors_when_input_is_reordered(self) -> None:
+    def test_edges_follow_down_revision(self) -> None:
         graph = GraphState(
             source_directory="/tmp/migrations",
             migrations=[
@@ -36,121 +36,98 @@ class BuildViewModelTests(unittest.TestCase):
         )
 
         payload = build_view_model(graph)
-        nodes = {node["revision"]: node for node in payload["layout"]["nodes"]}
-        edges = payload["layout"]["edges"]
+        nodes = {node["revision"]: node for node in payload["nodes"]}
+        edges = payload["edges"]
 
-        self.assertLess(nodes["child"]["y"], nodes["parent"]["y"])
-        self.assertLess(nodes["parent"]["y"], nodes["root"]["y"])
-        self.assertEqual(
-            edges,
-            [
-                {"from": "parent", "to": "child"},
-                {"from": "root", "to": "parent"},
+        self.assertIn("child", nodes)
+        self.assertIn("parent", nodes)
+        self.assertIn("root", nodes)
+        self.assertIn({"source": "parent", "target": "child"}, edges)
+        self.assertIn({"source": "root", "target": "parent"}, edges)
+
+    def test_head_detection(self) -> None:
+        graph = GraphState(
+            source_directory="/tmp/migrations",
+            migrations=[
+                MigrationNode(revision="head", down_revision="root", path="head.py"),
+                MigrationNode(revision="root", down_revision=None, path="root.py"),
             ],
         )
 
-    def test_valid_graph_ignores_stale_saved_positions_and_reflows(self) -> None:
-        graph = GraphState.model_validate(
-            {
-                "source_directory": "/tmp/migrations",
-                "migrations": [
-                    {
-                        "revision": "branch_a",
-                        "down_revision": "root",
-                        "path": "branch_a.py",
-                    },
-                    {
-                        "revision": "branch_b",
-                        "down_revision": "root",
-                        "path": "branch_b.py",
-                    },
-                    {
-                        "revision": "root",
-                        "down_revision": None,
-                        "path": "root.py",
-                    },
-                ],
-                "ui_state": {
-                    "positions": {
-                        "root": {"x": 9999, "y": 9999},
-                        "branch_a": {"x": 8888, "y": 8888},
-                        "branch_b": {"x": 7777, "y": 7777},
-                    },
-                    "pinned": [],
-                },
-            }
+        payload = build_view_model(graph)
+        nodes = {node["revision"]: node for node in payload["nodes"]}
+
+        self.assertTrue(nodes["head"]["is_head"])
+        self.assertFalse(nodes["root"]["is_head"])
+        self.assertEqual(payload["summary"]["heads"], ["head"])
+
+    def test_orphan_detection(self) -> None:
+        graph = GraphState(
+            source_directory="/tmp/migrations",
+            migrations=[
+                MigrationNode(
+                    revision="orphan",
+                    down_revision="missing",
+                    path="orphan.py",
+                ),
+            ],
         )
 
         payload = build_view_model(graph)
-        nodes = {node["revision"]: node for node in payload["layout"]["nodes"]}
+        nodes = {node["revision"]: node for node in payload["nodes"]}
 
-        self.assertEqual(nodes["root"]["x"], 80)
-        self.assertEqual(nodes["root"]["y"], 210)
-        self.assertEqual(nodes["branch_a"]["y"], 80)
-        self.assertEqual(nodes["branch_b"]["y"], 80)
-        self.assertNotEqual(nodes["branch_a"]["x"], nodes["branch_b"]["x"])
+        self.assertTrue(nodes["orphan"]["is_orphan"])
+        self.assertEqual(payload["summary"]["orphans"], ["orphan"])
 
-    def test_cyclic_graph_uses_cycle_tolerant_layout(self) -> None:
-        graph = GraphState.model_validate(
-            {
-                "source_directory": "/tmp/migrations",
-                "migrations": [
-                    {
-                        "revision": "a",
-                        "down_revision": "b",
-                        "path": "a.py",
-                    },
-                    {
-                        "revision": "b",
-                        "down_revision": "a",
-                        "path": "b.py",
-                    },
-                ],
-            }
+    def test_cycle_detection(self) -> None:
+        graph = GraphState(
+            source_directory="/tmp/migrations",
+            migrations=[
+                MigrationNode(revision="a", down_revision="b", path="a.py"),
+                MigrationNode(revision="b", down_revision="a", path="b.py"),
+            ],
         )
 
         payload = build_view_model(graph)
-        nodes = {node["revision"]: node for node in payload["layout"]["nodes"]}
+        nodes = {node["revision"]: node for node in payload["nodes"]}
 
-        self.assertEqual(nodes["a"]["y"], 80)
-        self.assertEqual(nodes["b"]["y"], 80)
-        self.assertNotEqual(nodes["a"]["x"], nodes["b"]["x"])
+        self.assertTrue(nodes["a"]["in_cycle"])
+        self.assertTrue(nodes["b"]["in_cycle"])
+        self.assertTrue(len(payload["summary"]["cycles"]) > 0)
 
-    def test_detached_root_uses_saved_position(self) -> None:
-        graph = GraphState.model_validate(
-            {
-                "source_directory": "/tmp/migrations",
-                "migrations": [
-                    {
-                        "revision": "leaf",
-                        "down_revision": None,
-                        "path": "leaf.py",
-                    },
-                    {
-                        "revision": "child",
-                        "down_revision": "root",
-                        "path": "child.py",
-                    },
-                    {
-                        "revision": "root",
-                        "down_revision": None,
-                        "path": "root.py",
-                    },
-                ],
-                "ui_state": {
-                    "positions": {
-                        "leaf": {"x": 640, "y": 320},
-                    },
-                    "pinned": ["leaf"],
-                },
-            }
+    def test_edges_omit_missing_parents(self) -> None:
+        graph = GraphState(
+            source_directory="/tmp/migrations",
+            migrations=[
+                MigrationNode(
+                    revision="orphan",
+                    down_revision="missing",
+                    path="orphan.py",
+                ),
+            ],
         )
 
         payload = build_view_model(graph)
-        nodes = {node["revision"]: node for node in payload["layout"]["nodes"]}
+        self.assertEqual(payload["edges"], [])
 
-        self.assertEqual(nodes["leaf"]["x"], 640)
-        self.assertEqual(nodes["leaf"]["y"], 320)
+    def test_summary_counts(self) -> None:
+        graph = GraphState(
+            source_directory="/tmp/migrations",
+            migrations=[
+                MigrationNode(revision="a", down_revision=None, path="a.py"),
+                MigrationNode(revision="b", down_revision="a", path="b.py"),
+            ],
+        )
+
+        payload = build_view_model(graph)
+        self.assertEqual(payload["summary"]["migrations_count"], 2)
+
+    def test_no_layout_key_in_response(self) -> None:
+        graph = GraphState(source_directory="/tmp", migrations=[])
+        payload = build_view_model(graph)
+        self.assertNotIn("layout", payload)
+        self.assertIn("nodes", payload)
+        self.assertIn("edges", payload)
 
 
 if __name__ == "__main__":

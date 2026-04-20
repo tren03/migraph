@@ -3,6 +3,8 @@
 let initialData = null;
 let currentData = null;
 let selectedRevision = null;
+let cy = null;
+let lockedPanX = null;
 
 // Utilities
 function clone(value) {
@@ -14,10 +16,10 @@ function setStatus(message, isError = false) {
   const statusIndicator = document.getElementById("statusIndicator");
   statusText.textContent = message;
   statusText.className = isError ? "status-text error" : "status-text";
-  statusIndicator.className = isError 
-    ? "status-indicator error" 
-    : message.includes("...") 
-      ? "status-indicator active" 
+  statusIndicator.className = isError
+    ? "status-indicator error"
+    : message.includes("...")
+      ? "status-indicator active"
       : "status-indicator ready";
 }
 
@@ -47,13 +49,6 @@ function shorten(value, maxLength) {
 }
 
 // Graph Helpers
-function findNode(revision) {
-  return (
-    currentData.layout.nodes.find((entry) => entry.revision === revision) ||
-    null
-  );
-}
-
 function findMigration(revision) {
   return (
     currentData.graph.migrations.find((entry) => entry.revision === revision) ||
@@ -76,112 +71,361 @@ function currentParentLabel(migration) {
 }
 
 function getAllRevisions() {
-  return currentData?.graph?.migrations?.map(m => m.revision) || [];
-}
-
-// SVG Path Calculations
-const ARROW_SIZE = 7; // matches marker refX
-
-function edgePath(from, to, nodeWidth, nodeHeight) {
-  const startX = from.x + nodeWidth / 2;
-  const endX = to.x + nodeWidth / 2;
-  const goingDown = from.y <= to.y;
-  const startY = goingDown ? from.y + nodeHeight : from.y;
-  // Pull endpoint back by arrow size so the arrowhead tip lands at the node rect edge
-  const endY = goingDown
-    ? to.y - ARROW_SIZE
-    : to.y + nodeHeight + ARROW_SIZE;
-  const bend = Math.max(40, Math.abs(endY - startY) / 2);
-  const control1Y = goingDown ? startY + bend : startY - bend;
-  const control2Y = goingDown ? endY - bend : endY + bend;
-  return `M ${startX} ${startY} C ${startX} ${control1Y}, ${endX} ${control2Y}, ${endX} ${endY}`;
-}
-
-function positionInitialViewport() {
-  const container = document.getElementById("graphContainer");
-  if (!container || !currentData?.layout) return;
-
-  const canvas = currentData.layout.canvas;
-  container.scrollLeft = Math.max(0, (canvas.width - container.clientWidth) / 2);
-  container.scrollTop = 0;
+  return currentData?.graph?.migrations?.map((m) => m.revision) || [];
 }
 
 function isDetachedNode(revision) {
   const initialMigration = findInitialMigration(revision);
   const migration = findMigration(revision);
-  return Boolean(initialMigration?.down_revision != null && migration?.down_revision == null);
-}
-
-function pinDetachedNodePosition(revision) {
-  const node = findNode(revision);
-  if (!node || !currentData?.graph?.ui_state) return;
-
-  currentData.graph.ui_state.positions[revision] = { x: node.x, y: node.y };
-  if (!currentData.graph.ui_state.pinned.includes(revision)) {
-    currentData.graph.ui_state.pinned.push(revision);
-  }
-}
-
-function clearPinnedNodePosition(revision) {
-  if (!currentData?.graph?.ui_state?.positions) return;
-  delete currentData.graph.ui_state.positions[revision];
-  currentData.graph.ui_state.pinned = currentData.graph.ui_state.pinned.filter(
-    (entry) => entry !== revision
+  return Boolean(
+    initialMigration?.down_revision != null && migration?.down_revision == null
   );
 }
 
-function ensureNodeVisible(revision) {
-  const container = document.getElementById("graphContainer");
-  const node = findNode(revision);
-  if (!container || !node || !currentData?.layout) return;
-
-  const { node_width: nodeWidth, node_height: nodeHeight } = currentData.layout;
-  const padding = 24;
-  const left = node.x - padding;
-  const right = node.x + nodeWidth + padding;
-  const top = node.y - padding;
-  const bottom = node.y + nodeHeight + padding;
-
-  if (left < container.scrollLeft) {
-    container.scrollLeft = Math.max(0, left);
-  } else if (right > container.scrollLeft + container.clientWidth) {
-    container.scrollLeft = Math.max(0, right - container.clientWidth);
-  }
-
-  if (top < container.scrollTop) {
-    container.scrollTop = Math.max(0, top);
-  } else if (bottom > container.scrollTop + container.clientHeight) {
-    container.scrollTop = Math.max(0, bottom - container.clientHeight);
-  }
+function isChangedNode(revision) {
+  const initialMigration = findInitialMigration(revision);
+  const migration = findMigration(revision);
+  if (!initialMigration || !migration) return false;
+  if (migration.down_revision == null) return false;
+  const serialize = (value) =>
+    Array.isArray(value) ? JSON.stringify([...value].sort()) : value ?? null;
+  return serialize(initialMigration.down_revision) !== serialize(migration.down_revision);
 }
 
 // State Management
 function setSelectedRevision(revision) {
   selectedRevision = revision;
   renderSelectedNodePanel();
-  renderGraph(currentData);
+  refreshNodeClasses();
 
-  // Update button states
   document.getElementById("clearSelectionButton").disabled = !revision;
   const migration = revision ? findMigration(revision) : null;
-  document.getElementById("detachButton").disabled = !migration || migration.down_revision == null;
+  document.getElementById("detachButton").disabled =
+    !migration || migration.down_revision == null;
 
   if (revision) {
-    setStatus(`${shorten(revision, 16)} selected · click another node to set as its parent`);
+    setStatus(
+      `${shorten(revision, 16)} selected · click another node to set as its parent`
+    );
   }
 }
 
 function updateParent(revision, parentRevision) {
   const migration = findMigration(revision);
   if (!migration) return;
+  migration.down_revision = parentRevision;
+}
 
-  if (parentRevision == null) {
-    pinDetachedNodePosition(revision);
-  } else {
-    clearPinnedNodePosition(revision);
+// Cytoscape
+const CY_STYLE = [
+  {
+    selector: "node",
+    style: {
+      shape: "rectangle",
+      width: 220,
+      height: 72,
+      "background-color": "#1a1a1d",
+      "border-color": "#3a3a3f",
+      "border-width": 1,
+      label: "data(label)",
+      "text-wrap": "wrap",
+      "text-valign": "center",
+      "text-halign": "center",
+      "font-family": "JetBrains Mono, monospace",
+      "font-size": 11,
+      color: "#fafafa",
+      "text-max-width": 196,
+      "line-height": 1.4,
+    },
+  },
+  {
+    selector: "node:hover",
+    style: { "border-color": "#a0a0a8" },
+  },
+  {
+    selector: "node.head",
+    style: {
+      "background-color": "#00ff88",
+      "background-opacity": 0.12,
+      "border-color": "#00ff88",
+      color: "#fafafa",
+    },
+  },
+  {
+    selector: "node.orphan",
+    style: {
+      "background-color": "#ffaa00",
+      "background-opacity": 0.12,
+      "border-color": "#ffaa00",
+      color: "#fafafa",
+    },
+  },
+  {
+    selector: "node.cycle",
+    style: {
+      "background-color": "#ff0066",
+      "background-opacity": 0.12,
+      "border-color": "#ff0066",
+      "border-width": 2,
+      color: "#fafafa",
+    },
+  },
+  {
+    selector: "node.changed",
+    style: {
+      "background-color": "#a78bfa",
+      "background-opacity": 0.12,
+      "border-color": "#a78bfa",
+      "border-width": 2,
+      color: "#fafafa",
+    },
+  },
+  {
+    selector: "node.detached",
+    style: {
+      "background-color": "#ff3333",
+      "background-opacity": 0.12,
+      "border-color": "#ff3333",
+      "border-width": 2,
+      "border-style": "dashed",
+      color: "#fafafa",
+    },
+  },
+  {
+    selector: "node.selected",
+    style: {
+      "background-color": "#00d4ff",
+      "background-opacity": 0.12,
+      "border-color": "#00d4ff",
+      "border-width": 2,
+      color: "#fafafa",
+    },
+  },
+  {
+    selector: "node.selected.detached",
+    style: {
+      "background-color": "#00d4ff",
+      "background-opacity": 0.12,
+      "border-color": "#ff3333",
+      "border-style": "dashed",
+      color: "#fafafa",
+    },
+  },
+  {
+    selector: "edge",
+    style: {
+      "curve-style": "bezier",
+      "target-arrow-shape": "triangle",
+      "line-color": "#404048",
+      "target-arrow-color": "#404048",
+      width: 1.5,
+      "arrow-scale": 1.2,
+    },
+  },
+];
+
+function nodeLabel(node) {
+  const revision = shorten(node.revision, 20);
+  const description = shorten(node.description || node.path, 30);
+  const parentText = Array.isArray(node.down_revision)
+    ? node.down_revision.join(", ")
+    : node.down_revision || "root";
+  return `${revision}\n${description}\n\u2190 ${shorten(parentText, 24)}`;
+}
+
+function nodeClasses(node) {
+  const classes = [];
+  if (node.is_head) classes.push("head");
+  if (node.is_orphan) classes.push("orphan");
+  if (node.in_cycle) classes.push("cycle");
+  if (isDetachedNode(node.revision)) classes.push("detached");
+  else if (isChangedNode(node.revision)) classes.push("changed");
+  return classes;
+}
+
+function initCytoscape() {
+  const container = document.getElementById("app");
+  container.className = "";
+  container.innerHTML = "";
+
+  if (typeof cytoscapeDagre !== "undefined") {
+    cytoscape.use(cytoscapeDagre);
   }
 
-  migration.down_revision = parentRevision;
+  cy = cytoscape({
+    container,
+    style: CY_STYLE,
+    layout: { name: "preset" },
+    userZoomingEnabled: false,
+    userPanningEnabled: true,
+    boxSelectionEnabled: false,
+    minZoom: 0.1,
+    maxZoom: 3,
+  });
+
+  container.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) {
+        const zoomFactor = Math.exp(-e.deltaY * 0.002);
+        const rect = container.getBoundingClientRect();
+        cy.zoom({
+          level: cy.zoom() * zoomFactor,
+          renderedPosition: {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+          },
+        });
+        lockedPanX = cy.pan().x;
+      } else {
+        const currentPan = cy.pan();
+        cy.pan({
+          x: currentPan.x,
+          y: currentPan.y - e.deltaY,
+        });
+      }
+    },
+    { passive: false }
+  );
+
+  cy.on("pan", () => {
+    if (lockedPanX === null) return;
+    const p = cy.pan();
+    if (p.x !== lockedPanX) {
+      cy.pan({ x: lockedPanX, y: p.y });
+    }
+  });
+
+  cy.on("tap", "node", (evt) => {
+    const revision = evt.target.id();
+    if (selectedRevision === revision) {
+      setSelectedRevision(null);
+    } else if (selectedRevision) {
+      const child = selectedRevision;
+      const parent = revision;
+      updateParent(child, parent);
+      setSelectedRevision(null);
+      previewGraph(
+        `Set parent of ${shorten(child, 12)} \u2192 ${shorten(parent, 12)}`
+      ).catch((err) => setStatus(`Failed to rewire: ${err.message}`, true));
+    } else {
+      setSelectedRevision(revision);
+    }
+  });
+
+  cy.on("tap", (evt) => {
+    if (evt.target === cy) {
+      setSelectedRevision(null);
+    }
+  });
+}
+
+function refreshNodeClasses() {
+  if (!cy) return;
+  cy.nodes().forEach((node) => node.removeClass("selected"));
+  if (selectedRevision) {
+    cy.$(`#${CSS.escape(selectedRevision)}`).addClass("selected");
+  }
+}
+
+function loadGraph(data, { fit = false } = {}) {
+  updateSidebar(data);
+
+  if (!data.nodes || !data.nodes.length) {
+    const app = document.getElementById("app");
+    if (cy) {
+      cy.destroy();
+      cy = null;
+    }
+    app.className = "empty-state-container";
+    app.innerHTML = `
+      <div class="empty-state-message">
+        <div class="icon">\u2205</div>
+        <div>No migrations found</div>
+      </div>
+    `;
+    return;
+  }
+
+  if (!cy) initCytoscape();
+
+  cy.batch(() => {
+    cy.elements().remove();
+
+    for (const node of data.nodes) {
+      cy.add({
+        group: "nodes",
+        data: {
+          id: node.revision,
+          label: nodeLabel(node),
+          down_revision: node.down_revision,
+          path: node.path,
+          description: node.description,
+        },
+        classes: nodeClasses(node),
+      });
+    }
+
+    for (const edge of data.edges) {
+      cy.add({
+        group: "edges",
+        data: {
+          id: `${edge.source}__${edge.target}`,
+          source: edge.source,
+          target: edge.target,
+        },
+      });
+    }
+
+    if (selectedRevision) {
+      cy.$(`#${CSS.escape(selectedRevision)}`).addClass("selected");
+    }
+  });
+
+  const previousZoom = fit ? null : cy.zoom();
+  const previousPan = fit ? null : { ...cy.pan() };
+  lockedPanX = null;
+
+  cy.layout({
+    name: "dagre",
+    rankDir: "BT",
+    nodeSep: 40,
+    rankSep: 100,
+    padding: 80,
+  }).run();
+
+  if (fit) {
+    cy.fit(undefined, 40);
+    if (cy.zoom() < 0.6) {
+      cy.zoom(0.85);
+      const heads = cy.nodes(".head");
+      cy.center(heads.length ? heads : undefined);
+    }
+  } else {
+    cy.zoom(previousZoom);
+    cy.pan(previousPan);
+  }
+  lockedPanX = cy.pan().x;
+}
+
+function updateSidebar(data) {
+  document.getElementById("source").textContent =
+    data.graph.source_directory || "Unknown";
+  document.getElementById("count").textContent = String(
+    data.summary.migrations_count || 0
+  );
+  document.getElementById("headsCount").textContent = String(
+    data.summary.heads?.length || 0
+  );
+  document.getElementById("orphansCount").textContent = String(
+    data.summary.orphans?.length || 0
+  );
+  document.getElementById("cyclesCount").textContent = String(
+    data.summary.cycles?.length || 0
+  );
+  setBadgeList("heads", data.summary.heads, "head");
+  setBadgeList("orphans", data.summary.orphans, "orphan");
 }
 
 // Rendering
@@ -190,24 +434,26 @@ function renderSelectedNodePanel() {
   const migration = selectedRevision ? findMigration(selectedRevision) : null;
 
   if (!migration) {
-    selectedNode.innerHTML = '<div class="empty-state">Click a node to inspect</div>';
+    selectedNode.innerHTML =
+      '<div class="empty-state">Click a node to inspect</div>';
     return;
   }
 
-  const parent = currentParentLabel(migration);
-  const allRevisions = getAllRevisions().filter(r => r !== migration.revision);
-  
-  // Build parent selector options
+  const allRevisions = getAllRevisions().filter(
+    (r) => r !== migration.revision
+  );
+
+  const noneSelected = migration.down_revision == null;
   const options = [
-    '<option value="">-- None (root) --</option>',
-    ...allRevisions.map(r => {
-      const isSelected = (Array.isArray(migration.down_revision) 
+    `<option value="" ${noneSelected ? "selected" : ""}>-- None (root) --</option>`,
+    ...allRevisions.map((r) => {
+      const isSelected = Array.isArray(migration.down_revision)
         ? migration.down_revision.includes(r)
-        : migration.down_revision === r);
-      return `<option value="${r}" ${isSelected ? 'selected' : ''}>${r}</option>`;
-    })
-  ].join('');
-  
+        : migration.down_revision === r;
+      return `<option value="${r}" ${isSelected ? "selected" : ""}>${r}</option>`;
+    }),
+  ].join("");
+
   selectedNode.innerHTML = `
     <div class="detail-row">
       <span class="detail-label">Revision</span>
@@ -224,8 +470,7 @@ function renderSelectedNodePanel() {
       <span class="detail-value">${migration.path}</span>
     </div>
   `;
-  
-  // Bind change event to parent selector
+
   const select = document.getElementById("parentSelect");
   if (select) {
     select.addEventListener("change", async (e) => {
@@ -233,7 +478,7 @@ function renderSelectedNodePanel() {
       updateParent(migration.revision, newParent);
       try {
         const parentLabel = newParent || "root";
-        await previewGraph(`Updated parent → ${shorten(parentLabel, 20)}`);
+        await previewGraph(`Updated parent \u2192 ${shorten(parentLabel, 20)}`);
       } catch (error) {
         setStatus(`Failed to update parent: ${error.message}`, true);
       }
@@ -241,102 +486,8 @@ function renderSelectedNodePanel() {
   }
 }
 
-function renderGraph(data) {
-  const app = document.getElementById("app");
-
-  // Update header stats
-  document.getElementById("source").textContent = data.graph.source_directory || "Unknown";
-  document.getElementById("count").textContent = String(data.summary.migrations_count || 0);
-  document.getElementById("headsCount").textContent = String(data.summary.heads?.length || 0);
-  document.getElementById("orphansCount").textContent = String(data.summary.orphans?.length || 0);
-  document.getElementById("cyclesCount").textContent = String(data.summary.cycles?.length || 0);
-  
-  // Update badge lists
-  setBadgeList("heads", data.summary.heads, "head");
-  setBadgeList("orphans", data.summary.orphans, "orphan");
-
-  // Empty state
-  if (!data.layout.nodes.length) {
-    app.className = "empty-state-container";
-    app.innerHTML = `
-      <div class="empty-state-container">
-        <div class="empty-state-message">
-          <div class="icon">∅</div>
-          <div>No migrations found</div>
-        </div>
-      </div>
-    `;
-    return;
-  }
-
-  app.className = "graph-canvas";
-
-  const nodeWidth = data.layout.node_width;
-  const nodeHeight = data.layout.node_height;
-  const nodes = new Map(data.layout.nodes.map((node) => [node.revision, node]));
-  const svg = [];
-
-  svg.push(
-    `<svg width="${data.layout.canvas.width}" height="${data.layout.canvas.height}" viewBox="0 0 ${data.layout.canvas.width} ${data.layout.canvas.height}" xmlns="http://www.w3.org/2000/svg">`
-  );
-
-  svg.push(`<defs>
-    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse">
-      <polygon points="0 0, 8 3, 0 6" fill="context-stroke" />
-    </marker>
-  </defs>`);
-
-  // Draw edges
-  for (const edge of data.layout.edges) {
-    const from = nodes.get(edge.from);
-    const to = nodes.get(edge.to);
-    if (!from || !to) continue;
-    svg.push(
-      `<path class="edge" d="${edgePath(from, to, nodeWidth, nodeHeight)}" marker-end="url(#arrowhead)" />`
-    );
-  }
-
-  // Draw nodes
-  for (const node of data.layout.nodes) {
-    const classes = ["node"];
-    if (node.is_head) classes.push("head");
-    if (node.is_orphan) classes.push("orphan");
-    if (node.in_cycle) classes.push("cycle");
-    if (isDetachedNode(node.revision)) classes.push("detached");
-    if (selectedRevision === node.revision) classes.push("selected");
-
-    const description = shorten(node.description || node.path, 32);
-    const revision = shorten(node.revision, 20);
-    const parentText = Array.isArray(node.down_revision)
-      ? node.down_revision.join(", ")
-      : node.down_revision || "root";
-
-    svg.push(
-      `<g class="${classes.join(" ")}" data-revision="${node.revision}" transform="translate(${node.x}, ${node.y})" style="cursor: pointer">`
-    );
-    svg.push(
-      `<title>${node.revision}
-${node.description || node.path}
-parent: ${parentText}</title>`
-    );
-    svg.push(`<rect width="${nodeWidth}" height="${nodeHeight}" />`);
-    
-    // Text labels
-    svg.push(`<text class="node-title" x="12" y="26">${revision}</text>`);
-    svg.push(`<text class="node-meta" x="12" y="44">${description}</text>`);
-    svg.push(
-      `<text class="node-meta" x="12" y="58">← ${shorten(parentText, 24)}</text>`
-    );
-    
-    svg.push(`</g>`);
-  }
-  
-  svg.push("</svg>");
-  app.innerHTML = svg.join("");
-}
-
 // API Calls
-async function previewGraph(message) {
+async function previewGraph(message, { fit = false } = {}) {
   const response = await fetch("/api/preview", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -348,13 +499,8 @@ async function previewGraph(message) {
   }
   currentData = payload;
   renderSelectedNodePanel();
-  renderGraph(currentData);
-  if (selectedRevision) {
-    requestAnimationFrame(() => ensureNodeVisible(selectedRevision));
-  }
-  if (message) {
-    setStatus(message);
-  }
+  loadGraph(currentData, { fit });
+  if (message) setStatus(message);
 }
 
 async function exportGraph() {
@@ -441,8 +587,7 @@ async function refreshFromDisk() {
     currentData = clone(payload);
     selectedRevision = null;
     renderSelectedNodePanel();
-    renderGraph(currentData);
-    requestAnimationFrame(positionInitialViewport);
+    loadGraph(currentData, { fit: true });
     setStatus("Refreshed from disk");
   } catch (error) {
     setStatus(`Refresh failed: ${error.message}`, true);
@@ -451,25 +596,21 @@ async function refreshFromDisk() {
   }
 }
 
-function resetLayout() {
+async function resetLayout() {
   if (!initialData) return;
   currentData = clone(initialData);
-  currentData.graph.ui_state.positions = {};
-  currentData.graph.ui_state.pinned = [];
   selectedRevision = null;
-  renderSelectedNodePanel();
-  renderGraph(currentData);
-  setStatus("Layout reset to automatic positioning");
+  try {
+    await previewGraph("Reset to initial state", { fit: true });
+  } catch (error) {
+    setStatus(`Reset failed: ${error.message}`, true);
+  }
 }
 
 async function autoFormatLayout() {
   if (!currentData) return;
-
-  currentData.graph.ui_state.positions = {};
-  currentData.graph.ui_state.pinned = [];
-
   try {
-    await previewGraph("Graph auto-formatted");
+    await previewGraph("Graph auto-formatted", { fit: true });
   } catch (error) {
     setStatus(`Auto-format failed: ${error.message}`, true);
   }
@@ -479,43 +620,12 @@ async function detachSelectedParent() {
   if (!selectedRevision) return;
   updateParent(selectedRevision, null);
   try {
-    await previewGraph(`Detached parent from ${shorten(selectedRevision, 12)}`);
+    await previewGraph(
+      `Detached parent from ${shorten(selectedRevision, 12)}`
+    );
   } catch (error) {
     setStatus(`Detach failed: ${error.message}`, true);
   }
-}
-
-// Event Binding
-function bindInteractions() {
-  const app = document.getElementById("app");
-
-  app.addEventListener("click", (event) => {
-    const nodeEl = event.target.closest("[data-revision]");
-
-    if (!nodeEl) {
-      // Click on empty canvas → deselect
-      setSelectedRevision(null);
-      return;
-    }
-
-    const revision = nodeEl.dataset.revision;
-
-    if (selectedRevision === revision) {
-      // Click same node → cancel selection
-      setSelectedRevision(null);
-    } else if (selectedRevision) {
-      // Second node clicked → set it as parent of the first selected node
-      const child = selectedRevision;
-      const parent = revision;
-      updateParent(child, parent);
-      setSelectedRevision(null);
-      previewGraph(`Set parent of ${shorten(child, 12)} → ${shorten(parent, 12)}`)
-        .catch((error) => setStatus(`Failed to rewire: ${error.message}`, true));
-    } else {
-      // Nothing selected → select this node
-      setSelectedRevision(revision);
-    }
-  });
 }
 
 // Initialization
@@ -524,14 +634,10 @@ document.getElementById("applyButton").addEventListener("click", applyGraph);
 document.getElementById("refreshButton").addEventListener("click", refreshFromDisk);
 document.getElementById("autoFormatButton").addEventListener("click", autoFormatLayout);
 document.getElementById("resetButton").addEventListener("click", resetLayout);
-document
-  .getElementById("detachButton")
-  .addEventListener("click", detachSelectedParent);
-document
-  .getElementById("clearSelectionButton")
-  .addEventListener("click", () => setSelectedRevision(null));
-
-bindInteractions();
+document.getElementById("detachButton").addEventListener("click", detachSelectedParent);
+document.getElementById("clearSelectionButton").addEventListener("click", () =>
+  setSelectedRevision(null)
+);
 
 fetch("/api/graph")
   .then((response) => response.json())
@@ -539,15 +645,14 @@ fetch("/api/graph")
     initialData = clone(payload);
     currentData = clone(payload);
     renderSelectedNodePanel();
-    renderGraph(currentData);
-    requestAnimationFrame(positionInitialViewport);
-    setStatus("Ready · Click a node to rewire its parent");
+    loadGraph(currentData, { fit: true });
+    setStatus("Ready \u00b7 Click a node to rewire its parent");
   })
   .catch((error) => {
     document.getElementById("app").innerHTML = `
       <div class="empty-state-container">
         <div class="empty-state-message">
-          <div class="icon">✕</div>
+          <div class="icon">\u2715</div>
           <div>Failed to load graph</div>
           <div style="margin-top: 8px; font-size: 12px;">${error.message}</div>
         </div>
