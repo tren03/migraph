@@ -21,13 +21,20 @@ def find_alembic_ini(start_path: str | None = None) -> str | None:
 
 def parse_alembic_ini(ini_path: str) -> Tuple[Optional[str], Optional[str]]:
     """Parse alembic.ini to extract script_location and version_locations."""
-    config = ConfigParser()
+    # Alembic uses %(here)s for the directory containing alembic.ini. Python's
+    # default ConfigParser interpolation treats it as a missing config option.
+    config = ConfigParser(interpolation=None)
     config.read(ini_path)
     if "alembic" not in config:
         return None, None
     alembic_section = config["alembic"]
     script_location = alembic_section.get("script_location", "alembic")
     version_locations = alembic_section.get("version_locations")
+    here = str(Path(ini_path).resolve().parent)
+    if script_location:
+        script_location = script_location.replace("%(here)s", here)
+    if version_locations:
+        version_locations = version_locations.replace("%(here)s", here)
     return script_location, version_locations
 
 
