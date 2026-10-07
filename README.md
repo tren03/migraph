@@ -2,6 +2,13 @@
 
 Interactive browser UI for visualizing and rewiring Alembic migration graphs.
 
+## Demo
+
+
+https://github.com/user-attachments/assets/4d41197a-58cd-497c-bfa6-8ea2446151bf
+
+
+
 ## Install
 
 ```bash
